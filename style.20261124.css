@@ -1,0 +1,164 @@
+/* 绘本网页版电子书 · 样式
+   注意：page-flip 的 CSS 由 bundle 用 style-loader 注入 <head> 末尾，可能晚于本文件。
+   因此下面把库的 8 条规则前置一份，且所有自定义选择器都保持足够高的特异性。 */
+
+/* ---- StPageFlip 2.0.7 内置规则（前置备份，勿删） ---- */
+.stf__parent { position: relative; display: block; box-sizing: border-box; transform: translateZ(0);
+  -ms-touch-action: pan-y; touch-action: pan-y; }
+.sft__wrapper, .stf__wrapper { position: relative; width: 100%; box-sizing: border-box; }
+.stf__parent canvas { position: absolute; width: 100%; height: 100%; left: 0; top: 0; }
+.stf__block { position: absolute; width: 100%; height: 100%; box-sizing: border-box; perspective: 2000px; }
+.stf__item { display: none; position: absolute; transform-style: preserve-3d; }
+.stf__outerShadow, .stf__innerShadow, .stf__hardShadow, .stf__hardInnerShadow { position: absolute; left: 0; top: 0; }
+
+/* ---- 主题 ---- */
+:root {
+  --paper: #f6f1e6;
+  --board: #2f2a24;
+  --ink: #3a332c;
+  --accent: #a67e52;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  background: radial-gradient(ellipse at 50% 26%, #4a4138 0%, #2b2620 58%, #1d1a16 100%);
+  color: var(--paper);
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+.app {
+  min-height: 100svh;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+@supports not (height: 100svh) { .app { min-height: 100vh; } }
+
+.topbar { flex: 0 0 auto; text-align: center; padding: 12px 12px 2px; }
+.topbar h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .08em; }
+.topbar p { margin: 3px 0 0; font-size: 11px; opacity: .55; }
+
+/* 书台：宽度由 app.js 的 fitStage() 按 topbar/toolbar 真实占用计算 */
+#stage {
+  --h-factor: 1.5;              /* 由 app.js 按方向写入：landscape=2*ratio, portrait=ratio */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; max-width: 1440px;
+  margin-inline: auto;
+}
+/* 空半边露出的深色书壳：直接画在 #book 上，尺寸与双页完全一致，不会比书大一圈 */
+#book {
+  position: relative; z-index: 1;
+  /* 覆盖库注入的 min-width:360px / max-width:1440px（小屏会溢出） */
+  min-width: 0 !important; max-width: none !important;
+  background: linear-gradient(90deg,
+    #3f362d 0%, #4a4034 34%, #332c24 45%,
+    #1e1a15 49.4%, #1e1a15 50.6%,
+    #332c24 55%, #4a4034 66%, #3a322a 100%);
+  box-shadow: 0 26px 64px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.4);
+}
+
+/* ---- 页面：库每帧用 cssText 覆写 .stf__item 内联样式，
+       所有自定义样式必须写在内部 .page-inner 及其子元素上 ---- */
+.stf__item > .page-inner {
+  position: absolute; inset: 0; overflow: hidden;
+  background-color: var(--paper);
+  background-position: center; background-size: cover; background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.09);
+}
+.stf__item > .page-inner > .page-img {
+  display: block; width: 100%; height: 100%;
+  object-fit: contain;                 /* 不裁切绘本内容 */
+  pointer-events: none; user-select: none; -webkit-user-drag: none;
+  opacity: 0; transition: opacity .3s ease;
+}
+.stf__item > .page-inner > .page-img.is-loaded { opacity: 1; }
+/* 纸张轻噪点，内联 SVG，无外链 */
+.stf__item > .page-inner::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  opacity: .045; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.5'/></svg>");
+}
+/* 中缝：只在靠书脊的一侧出现 */
+.stf__item > .page-inner > .gutter {
+  position: absolute; top: 0; bottom: 0; width: 7%; pointer-events: none; opacity: .62;
+}
+.stf__item.--left > .page-inner > .gutter--right {
+  right: 0; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,.10) 55%, rgba(0,0,0,.30) 100%);
+}
+.stf__item.--right > .page-inner > .gutter--left {
+  left: 0; background: linear-gradient(to left, transparent 0%, rgba(0,0,0,.10) 55%, rgba(0,0,0,.30) 100%);
+}
+#stage[data-orientation="portrait"] .gutter { display: none; }   /* 手机单页无中缝 */
+.stf__item > .page-inner > .page-num {
+  position: absolute; bottom: 2.6%; font-size: 12px; color: rgba(58,51,44,.5);
+  font-variant-numeric: tabular-nums;
+}
+.stf__item.--left > .page-inner > .page-num { left: 6%; }
+.stf__item.--right > .page-inner > .page-num { right: 6%; }
+.stf__item[data-cover="1"] > .page-inner,
+.stf__item[data-back="1"] > .page-inner { box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
+
+/* ---- 工具栏 ---- */
+.toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  gap: 9px; flex-wrap: wrap; padding: 10px 12px 16px;
+}
+.toolbar-sep { width: 1px; height: 20px; background: rgba(246,241,230,.2); margin: 0 3px; }
+.toolbar button, .overlay-close {
+  appearance: none; border: 1px solid rgba(246,241,230,.28);
+  background: rgba(246,241,230,.07); color: var(--paper);
+  border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer;
+  font-family: inherit; transition: background .18s, border-color .18s;
+}
+.toolbar button:hover:not(:disabled), .overlay-close:hover { background: rgba(246,241,230,.16); border-color: rgba(246,241,230,.5); }
+.toolbar button:active:not(:disabled) { background: rgba(246,241,230,.24); }
+.toolbar button:disabled { opacity: .32; cursor: default; }
+#page-label { min-width: 168px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; opacity: .85; }
+
+/* ---- 遮罩层 ---- */
+#loading {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: #221e1a; font-size: 14px; letter-spacing: .14em;
+}
+#loading[hidden] { display: none; }
+.overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center;
+  background: rgba(20,17,14,.95);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.overlay[hidden] { display: none; }
+#zoom-img { max-width: 94vw; max-height: 88svh; object-fit: contain; }
+#zoom-overlay .overlay-close { position: absolute; top: 18px; right: 18px; font-size: 22px; line-height: 1; padding: 6px 13px; }
+#toc-panel { flex-direction: column; align-items: stretch; }
+.toc-head { width: 100%; max-width: 900px; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 4px; font-size: 15px; }
+.toc-grid {
+  width: 100%; max-width: 900px; margin-inline: auto; max-height: 80svh; overflow: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px; padding: 12px 18px 24px;
+}
+.toc-item {
+  appearance: none; border: 1px solid rgba(246,241,230,.2); background: none;
+  padding: 4px; border-radius: 5px; cursor: pointer; color: var(--paper);
+  font-family: inherit; font-size: 11px; text-align: center;
+}
+.toc-item:hover { border-color: var(--accent); }
+.toc-item img { display: block; width: 100%; aspect-ratio: var(--page-ratio, 0.75); object-fit: cover; border-radius: 2px; }
+.toc-item span { display: block; margin-top: 4px; opacity: .7; }
+.toc-item.is-current { border-color: var(--accent); }
+
+@media (max-width: 720px) {
+  .topbar { padding-top: 8px; }
+  .topbar h1 { font-size: 13px; }
+  .topbar p { font-size: 10px; }
+  .toolbar { gap: 6px; padding: 8px 8px 12px; }
+  .toolbar button { padding: 7px 10px; font-size: 12px; }
+  /* 用分隔条占满整行，把「目录 / 放大 / 全屏」挤到第二行，避免右侧被裁 */
+  .toolbar-sep { display: block; flex-basis: 100%; height: 0; background: none; margin: 0; }
+  #page-label { min-width: 104px; font-size: 12px; }
+}
